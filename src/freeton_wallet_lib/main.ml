@@ -103,6 +103,8 @@ module MAIN = struct
         CommandTokenWTON.cmd;
         CommandTokenWTONCredit.cmd;
         CommandTokenWTONWithdraw.cmd;
+        CommandDuneAirdrop.cmd;
+        CommandDuneBatch.cmd;
       ]
 
   let main () =
