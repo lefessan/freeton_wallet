@@ -26,13 +26,15 @@ type transfer = {
   mutable tr_ton_amount : int64 ;
   mutable tr_ton_addr : string ;
   mutable tr_ton_pubkey : string ;
+  mutable tr_ready : bool ; [@dft false]
 } [@@deriving json_encoding]
 
 type batch = {
   batch_id : int ;
   batch_transfers : transfer list;
   batch_amount : int64 ;
-  batch_done : bool ;
+  batch_frozen : bool ;
+  batch_ready : bool ;
 } [@@deriving json_encoding]
 
 module Int64 = struct

@@ -457,7 +457,7 @@ let action ~swaps_file ~batch_files =
   let batch_counter = ref 1 in
   List.iter (fun file ->
       let batch = Misc.read_json_file batch_enc file in
-      if batch.batch_done then begin
+      if batch.batch_frozen then begin
         batch_counter := max !batch_counter ( batch.batch_id + 1 ) ;
         List.iter (fun tr ->
             let key = ( tr.tr_ton_addr, tr.tr_ton_pubkey ) in
@@ -516,6 +516,7 @@ let action ~swaps_file ~batch_files =
           tr_ton_addr = swap.swap_ton_addr ;
           tr_ton_pubkey = swap.swap_ton_pubkey ;
           tr_ton_amount = swap.swap_ton_amount ;
+          tr_ready = false ;
         } in
         Hashtbl.add transfers key tr;
         begin
@@ -554,11 +555,11 @@ let action ~swaps_file ~batch_files =
     swap_ton_pubkey = "89366e400fe8381dbd33fcf3feb497ea4869e0bdf06631b1a2110fafa4526836";
   } ;
 
-  let _tr_origin = Option.get !tr_origin in
-  let _tr_starchain = Option.get !tr_starchain in
-  let _tr_functori = Option.get !tr_functori in
-  let _tr_foundation = Option.get !tr_foundation in
-  let _tr_investors = Option.get !tr_investors in
+  let tr_origin = Option.get !tr_origin in
+  let tr_starchain = Option.get !tr_starchain in
+  let tr_functori = Option.get !tr_functori in
+  let tr_foundation = Option.get !tr_foundation in
+  let tr_investors = Option.get !tr_investors in
 
   Hashtbl.iter (fun key r ->
       match Hashtbl.find transfers key with
@@ -608,7 +609,10 @@ let action ~swaps_file ~batch_files =
 
   let discarded = ref [] in
   (* Generate next batch *)
-  let rec iter amount transfers ntransfers =
+  let rec iter amount count transfers ntransfers =
+    if count = 99 then
+      amount, transfers
+    else
     if ntransfers = 0 then
       amount, transfers
     else
@@ -618,16 +622,46 @@ let action ~swaps_file ~batch_files =
       let ntransfers = ntransfers-1 in
       if tr.tr_ton_amount > amount then begin
         discarded := tr :: !discarded ;
-        iter amount transfers ntransfers
+        iter amount count transfers ntransfers
       end else
-        iter ( amount -- tr.tr_ton_amount )
+        iter ( amount -- tr.tr_ton_amount ) (count+1)
           ( tr :: transfers ) ntransfers
   in
   let remaining_amount, transfers =
-    iter ( max_amount 1_000_000_000_000_000L )
+    iter ( max_amount 1_000_000_000_000_000L ) 0
       [] ( Array.length remaining_transfers ) in
   Printf.eprintf "Discarded %d transfers\n%!" (List.length !discarded);
   Printf.eprintf "Remaining for batch after %d transfers: %s TON\n%!"
+    ( List.length transfers )
+    ( Misc.string_of_nanoton remaining_amount );
+
+  let rec iter transfers remaining_amount accounts =
+    match accounts with
+    | [] -> remaining_amount, transfers
+    | tr :: accounts ->
+        if tr.tr_ton_amount = 0L then
+          iter transfers remaining_amount accounts
+        else
+          let amount = min tr.tr_ton_amount remaining_amount in
+          let remaining_amount = remaining_amount -- amount in
+          let transfer = { tr with tr_ton_amount = amount } in
+          tr.tr_ton_amount <- tr.tr_ton_amount -- amount ;
+          let transfers = transfer :: transfers in
+          if remaining_amount > 0L then
+            iter transfers remaining_amount accounts
+          else
+            remaining_amount, transfers
+  in
+  let remaining_amount, transfers = iter transfers remaining_amount
+      [
+        tr_origin ;
+        tr_functori ;
+        tr_investors ;
+        tr_starchain ;
+        tr_foundation ;
+      ]
+  in
+  Printf.eprintf "Final Remaining for batch after %d transfers: %s TON\n%!"
     ( List.length transfers )
     ( Misc.string_of_nanoton remaining_amount );
 
@@ -643,7 +677,8 @@ let action ~swaps_file ~batch_files =
         batch_id = !batch_counter ;
         batch_transfers = transfers ;
         batch_amount = total_amount ;
-        batch_done = false ;
+        batch_frozen = false ;
+        batch_ready = false ;
       } in
       let filename = Printf.sprintf "batch-%d.json" batch.batch_id in
       Misc.write_json_file batch_enc filename batch;
