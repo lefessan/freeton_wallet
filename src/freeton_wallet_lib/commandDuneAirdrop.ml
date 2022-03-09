@@ -10,6 +10,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Ez_file.V1
 open Ezcmd.V2
 open EZCMD.TYPES
 
@@ -85,6 +86,30 @@ let action ~swaps_file ~batch_files =
 
     total_dun := !total_dun ++ swap.swap_dun_amount ;
     total_ton := !total_ton ++ swap.swap_ton_amount ;
+
+    let swap = match swap.swap_ton_addr with
+      (* lost keys on Everscale side *)
+      | "0:ca417824f1e1abd65fb3438c6a02bdbaa5d7ee4e3b6af269c438d2013f0feb79"
+        -> {
+            swap with
+            swap_ton_addr = "0:30e34c3a85e621edd3e185a2ecc477a3623bbf4b8c193c73db2daa348c8aa778";
+            swap_ton_pubkey= "a2bb1ecb1deed3fcfde85ea6db911e7097747c2d05a38421c01b979104e4e896";
+          }
+      | "0:a19a5f19270793a9313e4fb6d9c8a70276d7c5bdf41efe087ea36a1eec7bf169"
+        -> {
+            swap with
+            swap_ton_addr = "0:a21da18a667f6d6f9a52403035df43cd05a5716c2d80ca6ab5e0414ab0320484";
+            swap_ton_pubkey= "658ac825b2b9a6077d6854afc9a1f8bf1117cce1caf417231a8ee895f7f7e7e7";
+          }
+      | "0:38828fbef7c83ab592e9cd86b9d276522bcd1d2578033fd659c17288cc25e204"
+        -> {
+            swap with
+            swap_ton_addr = "0:f40c029ce31bcedac78fb06a8caa1263030bd0fb9eb6db2c5e707f88c5a0d655";
+            swap_ton_pubkey= "eaa620bed9beaaa0bdab407090dc3a278f482c820b613045f1acb70742c60780";
+          }
+      | _ -> swap
+    in
+
 
     let key = (swap.swap_ton_addr, swap.swap_ton_pubkey) in
     match Hashtbl.find transfers key with
